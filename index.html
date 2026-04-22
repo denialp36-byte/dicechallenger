@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volcano Island: 2-Player Chaos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Quicksand:wght@400;700&display=swap');
+
+        :root {
+            --island-green: #7eb344;
+            --sea-blue: #70b0e0;
+            --volcano-lava: #ff4d00;
+            --path-white: #ffffff;
+            --p1-color: #e91e63;
+            --p2-color: #2196f3;
+        }
+
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background-color: #2c3e50;
+            margin: 0;
+            overflow-x: hidden;
+            color: white;
+        }
+
+        .game-title {
+            font-family: 'Bangers', cursive;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 0px #000;
+        }
+
+        /* Board Container */
+        #game-board {
+            position: relative;
+            width: 100%;
+            max-width: 1000px;
+            aspect-ratio: 4/3;
+            background: linear-gradient(to bottom, #87ceeb 0%, #4682b4 100%);
+            border: 8px solid #3e2723;
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            margin: 20px auto;
+            overflow: hidden;
+            background-image: url('https://images.unsplash.com/photo-1552560870-20e17698e6da?auto=format&fit=crop&q=80&w=1000'); 
+            background-size: cover;
+        }
+
+        .island-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Path Nodes */
+        .node {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #333;
+            z-index: 10;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+            font-size: 14px;
+        }
+
+        .node.red { background-color: #ff5252; color: white; border-color: #b71c1c; }
+        .node.yellow { background-color: #ffd740; border-color: #f57f17; }
+        .node.blue { background-color: #448aff; color: white; border-color: #0d47a1; }
+        .node.start { width: 70px; height: 70px; background: #fff; font-size: 18px; border: 5px solid #333; }
+        .node.goal { width: 80px; height: 80px; background: #ffd740; border: 5px dashed #f57f17; }
+
+        /* Player Tokens */
+        .player-token {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border: 2px solid white;
+            border-radius: 50%;
+            z-index: 100;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        #player1 { background: var(--p1-color); box-shadow: 0 0 15px rgba(233, 30, 99, 0.7); }
+        #player2 { background: var(--p2-color); box-shadow: 0 0 15px rgba(33, 150, 243, 0.7); }
+
+        .active-player-indicator {
+            border: 4px solid white;
+            transform: scale(1.2);
+            z-index: 101;
+        }
+
+        /* Dice Styles */
+        .dice {
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: #333;
+            box-shadow: 0 8px 0 #ddd, 0 15px 20px rgba(0,0,0,0.3);
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.1s;
+        }
+
+        .rolling { animation: shake 0.2s infinite; }
+
+        @keyframes shake {
+            0% { transform: translate(2px, 1px) rotate(0deg); }
+            20% { transform: translate(-1px, -2px) rotate(-1deg); }
+            40% { transform: translate(-3px, 0px) rotate(1deg); }
+            60% { transform: translate(3px, 2px) rotate(0deg); }
+            80% { transform: translate(1px, -1px) rotate(1deg); }
+            100% { transform: translate(-1px, 2px) rotate(-1deg); }
+        }
+
+        /* Event Modal */
+        #modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
+            color: #333;
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            border: 8px solid #ffd740;
+            animation: popIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .volcano { position: absolute; right: 20px; top: 20px; font-size: 80px; z-index: 2; }
+        .ship { position: absolute; bottom: 100px; left: 50%; font-size: 50px; z-index: 2; transform: translateX(-50%); }
+
+        .turn-card {
+            transition: all 0.3s ease;
+            opacity: 0.5;
+            transform: scale(0.9);
+        }
+        .turn-card.active {
+            opacity: 1;
+            transform: scale(1);
+            border-color: white;
+            box-shadow: 0 0 20px rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center p-4">
+
+    <h1 class="game-title text-5xl md:text-6xl text-yellow-400 mb-2">VOLCANO ISLAND CHAOS</h1>
+    <p class="mb-4 text-blue-200 font-bold uppercase tracking-widest text-sm">2-Player Student Survival Edition</p>
+
+    <div id="game-board">
+        <svg class="island-svg" viewBox="0 0 1000 750">
+            <path d="M0,0 L400,0 C350,200 250,400 0,500 Z" fill="#7eb344" />
+            <path d="M700,0 L1000,0 L1000,300 C850,250 750,150 700,0 Z" fill="#7eb344" />
+            <path d="M1000,500 C800,550 750,750 1000,750 Z" fill="#7eb344" />
+        </svg>
+
+        <div class="volcano">🌋</div>
+        <div class="ship">🚢</div>
+        
+        <div id="path-container"></div>
+
+        <!-- Players -->
+        <div id="player1" class="player-token">🤠</div>
+        <div id="player2" class="player-token">😎</div>
+    </div>
+
+    <!-- UI Controls -->
+    <div class="flex flex-col items-center gap-4 mt-2 w-full max-w-2xl">
+        <div class="flex items-stretch gap-4 w-full h-32">
+            <!-- Player 1 Status -->
+            <div id="status-p1" class="turn-card active flex-1 bg-pink-600 rounded-2xl p-4 border-2 border-transparent flex flex-col justify-center items-center">
+                <p class="text-xs uppercase font-bold mb-1">Player 1</p>
+                <p id="p1-space" class="text-2xl font-black">START</p>
+                <div id="p1-skip" class="hidden text-[10px] bg-white text-pink-600 px-2 py-0.5 rounded mt-1 font-bold">SKIPPED!</div>
+            </div>
+
+            <!-- Dice Center -->
+            <div class="flex flex-col items-center justify-center gap-2 px-4">
+                <div id="dice" class="dice">⚀</div>
+                <p id="turn-display" class="text-xs font-bold opacity-50 uppercase">Turn 1</p>
+            </div>
+
+            <!-- Player 2 Status -->
+            <div id="status-p2" class="turn-card flex-1 bg-blue-600 rounded-2xl p-4 border-2 border-transparent flex flex-col justify-center items-center">
+                <p class="text-xs uppercase font-bold mb-1">Player 2</p>
+                <p id="p2-space" class="text-2xl font-black">START</p>
+                <div id="p2-skip" class="hidden text-[10px] bg-white text-blue-600 px-2 py-0.5 rounded mt-1 font-bold">SKIPPED!</div>
+            </div>
+        </div>
+        
+        <button id="roll-btn" class="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-4 px-12 rounded-full text-2xl shadow-xl transition-all transform active:scale-95">
+            PLAYER 1: ROLL!
+        </button>
+    </div>
+
+    <!-- Event Modal -->
+    <div id="modal-overlay">
+        <div class="modal-content">
+            <h2 id="event-player" class="text-sm font-black uppercase text-gray-400 tracking-widest">Player 1</h2>
+            <h2 id="event-type" class="text-2xl font-black uppercase mb-1">Event!</h2>
+            <h3 id="event-title" class="text-xl font-bold text-red-600 mb-4">The All-Nighter</h3>
+            <p id="event-desc" class="text-gray-700 text-lg mb-6">Description goes here.</p>
+            <button id="close-modal" class="bg-blue-600 text-white font-bold py-3 px-12 rounded-xl hover:bg-blue-700 shadow-lg">CONTINUE</button>
+        </div>
+    </div>
+
+    <script>
+        const pathData = [
+            { id: 0, label: 'START', x: 100, y: 150, type: 'start' },
+            { id: 1, label: '01', x: 100, y: 250, type: 'red' },
+            { id: 2, label: '02', x: 150, y: 350, type: 'white' },
+            { id: 3, label: '03', x: 220, y: 430, type: 'white' },
+            { id: 4, label: '04', x: 300, y: 480, type: 'blue' },
+            { id: 5, label: '05', x: 380, y: 450, type: 'white' },
+            { id: 6, label: '06', x: 420, y: 360, type: 'white' },
+            { id: 7, label: '07', x: 480, y: 280, type: 'white' },
+            { id: 8, label: '08', x: 580, y: 240, type: 'blue' },
+            { id: 9, label: '09', x: 680, y: 240, type: 'white' },
+            { id: 10, label: '10', x: 780, y: 240, type: 'yellow' },
+            { id: 11, label: '11', x: 850, y: 320, type: 'white' },
+            { id: 12, label: '12', x: 920, y: 410, type: 'red' },
+            { id: 13, label: '13', x: 850, y: 500, type: 'white' },
+            { id: 14, label: '14', x: 750, y: 550, type: 'blue' },
+            { id: 15, label: '15', x: 650, y: 550, type: 'white' },
+            { id: 16, label: '16', x: 550, y: 550, type: 'white' },
+            { id: 17, label: '17', x: 460, y: 580, type: 'yellow' },
+            { id: 18, label: '18', x: 400, y: 680, type: 'white' },
+            { id: 19, label: '19', x: 400, y: 780, type: 'red' },
+            { id: 20, label: '20', x: 480, y: 850, type: 'white' },
+            { id: 21, label: '21', x: 580, y: 880, type: 'white' },
+            { id: 22, label: '22', x: 680, y: 850, type: 'white' },
+            { id: 23, label: '23', x: 780, y: 800, type: 'yellow' },
+            { id: 24, label: 'GOAL', x: 880, y: 750, type: 'goal' }
+        ];
+
+        const chaosEvents = [
+            { title: "The All-Nighter", desc: "You stay up late. Gain 3 spaces but skip your next turn.", effect: (idx) => { movePlayer(idx, 3); state.players[idx].skip = true; } },
+            { title: "Group Project Carry", desc: "You do all the work. Move back 2 spaces from exhaustion.", effect: (idx) => movePlayer(idx, -2) },
+            { title: "Cafeteria Mystery Meat", desc: "Ugh, your stomach hurts. Move back 1 space.", effect: (idx) => movePlayer(idx, -1) },
+            { title: "Curveball Bonus", desc: "The professor graded on a curve! Move forward 4 spaces.", effect: (idx) => movePlayer(idx, 4) },
+            { title: "Wi-Fi Dropped", desc: "You can't submit your work! Stay here for 1 turn.", effect: (idx) => { state.players[idx].skip = true; } },
+            { title: "Scholarship Fund", desc: "Financial aid arrived! Move forward 5 spaces.", effect: (idx) => movePlayer(idx, 5) },
+            { title: "Plagiarism Accusation", desc: "A misunderstanding! Move back to the nearest blue space.", effect: (idx) => jumpToType(idx, 'blue') },
+            { title: "Caffeine Overdose", desc: "You are vibrating! Roll again immediately.", effect: (idx) => { state.canRollAgain = true; } },
+            { title: "Textbook Buyback", desc: "You got $5 back. Move forward 1 space.", effect: (idx) => movePlayer(idx, 1) },
+            { title: "Pop Quiz!", desc: "Panicked! Move back 3 spaces.", effect: (idx) => movePlayer(idx, -3) },
+            { title: "Class Clown", desc: "Everyone laughs! Move forward 2 spaces.", effect: (idx) => movePlayer(idx, 2) },
+            { title: "Internship Offer", desc: "Success! Move forward 6 spaces.", effect: (idx) => movePlayer(idx, 6) },
+            { title: "Library Silence", desc: "Shhh! Skip your next turn while you study.", effect: (idx) => { state.players[idx].skip = true; } },
+            { title: "Student Discount", desc: "Cheaper coffee! Move forward 2 spaces.", effect: (idx) => movePlayer(idx, 2) },
+            { title: "Expired ID Card", desc: "Can't get in the building. Move back 4 spaces.", effect: (idx) => movePlayer(idx, -4) },
+            { title: "Brain Blast", desc: "Genius moment! Move forward 4 spaces.", effect: (idx) => movePlayer(idx, 4) },
+            { title: "Laundry Day", desc: "Nothing to wear. Stay here until next turn.", effect: (idx) => {} },
+            { title: "Social Butterfly", desc: "Spent too much time chatting. Move back 2 spaces.", effect: (idx) => movePlayer(idx, -2) },
+            { title: "Summer Break", desc: "Freedom! Move forward 8 spaces.", effect: (idx) => movePlayer(idx, 8) }
+        ];
+
+        const state = {
+            players: [
+                { id: 1, pos: 0, skip: false, el: null, statusEl: null, spaceEl: null, skipEl: null },
+                { id: 2, pos: 0, skip: false, el: null, statusEl: null, spaceEl: null, skipEl: null }
+            ],
+            activePlayerIdx: 0,
+            turns: 1,
+            isRolling: false,
+            canRollAgain: false,
+            gameEnded: false
+        };
+
+        const diceIcons = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+        const diceElement = document.getElementById('dice');
+        const rollBtn = document.getElementById('roll-btn');
+        const modal = document.getElementById('modal-overlay');
+
+        function init() {
+            const pathContainer = document.getElementById('path-container');
+            pathData.forEach(node => {
+                const div = document.createElement('div');
+                div.className = `node ${node.type}`;
+                div.style.left = `${node.x / 10}%`;
+                div.style.top = `${node.y / 10}%`;
+                div.innerText = node.label;
+                div.id = `node-${node.id}`;
+                pathContainer.appendChild(div);
+            });
+
+            state.players[0].el = document.getElementById('player1');
+            state.players[0].statusEl = document.getElementById('status-p1');
+            state.players[0].spaceEl = document.getElementById('p1-space');
+            state.players[0].skipEl = document.getElementById('p1-skip');
+
+            state.players[1].el = document.getElementById('player2');
+            state.players[1].statusEl = document.getElementById('status-p2');
+            state.players[1].spaceEl = document.getElementById('p2-space');
+            state.players[1].skipEl = document.getElementById('p2-skip');
+
+            updateUI();
+        }
+
+        function updateUI() {
+            state.players.forEach((p, idx) => {
+                const node = pathData[p.pos];
+                // Offset players slightly so they don't overlap perfectly
+                const offsetX = idx === 0 ? -10 : 10;
+                const offsetY = idx === 0 ? -10 : 10;
+                
+                p.el.style.left = `calc(${node.x / 10}% + 22px + ${offsetX}px)`;
+                p.el.style.top = `calc(${node.y / 10}% + 22px + ${offsetY}px)`;
+                p.spaceEl.innerText = node.label;
+                
+                if (p.skip) p.skipEl.classList.remove('hidden');
+                else p.skipEl.classList.add('hidden');
+
+                if (state.activePlayerIdx === idx) {
+                    p.statusEl.classList.add('active');
+                    p.el.classList.add('active-player-indicator');
+                } else {
+                    p.statusEl.classList.remove('active');
+                    p.el.classList.remove('active-player-indicator');
+                }
+            });
+
+            if (!state.gameEnded) {
+                rollBtn.innerText = `PLAYER ${state.activePlayerIdx + 1}: ROLL!`;
+                rollBtn.style.backgroundColor = state.activePlayerIdx === 0 ? '#ec4899' : '#3b82f6';
+                rollBtn.style.color = 'white';
+            }
+            document.getElementById('turn-display').innerText = `Turn ${state.turns}`;
+        }
+
+        function movePlayer(playerIdx, steps) {
+            let newPos = state.players[playerIdx].pos + steps;
+            if (newPos < 0) newPos = 0;
+            if (newPos >= pathData.length) newPos = pathData.length - 1;
+            
+            state.players[playerIdx].pos = newPos;
+            updateUI();
+
+            if (state.players[playerIdx].pos === pathData.length - 1) {
+                state.gameEnded = true;
+                showEvent(playerIdx, "VICTORY!", "You found the treasure!", `Player ${playerIdx + 1} survived the semester and won the game!`);
+                rollBtn.disabled = true;
+                rollBtn.innerText = "GAME OVER";
+            }
+        }
+
+        function jumpToType(playerIdx, type) {
+            for (let i = state.players[playerIdx].pos - 1; i >= 0; i--) {
+                if (pathData[i].type === type) {
+                    state.players[playerIdx].pos = i;
+                    updateUI();
+                    return;
+                }
+            }
+        }
+
+        function showEvent(playerIdx, type, title, desc) {
+            document.getElementById('event-player').innerText = `Player ${playerIdx + 1}`;
+            document.getElementById('event-type').innerText = type;
+            document.getElementById('event-title').innerText = title;
+            document.getElementById('event-desc').innerText = desc;
+            modal.style.display = 'flex';
+        }
+
+        rollBtn.onclick = () => {
+            if (state.isRolling || state.gameEnded) return;
+            
+            const activeP = state.players[state.activePlayerIdx];
+
+            if (activeP.skip) {
+                activeP.skip = false;
+                showEvent(state.activePlayerIdx, "SKIPPED", "Catching up on sleep", "You missed your turn but you feel refreshed now!");
+                switchTurn();
+                return;
+            }
+
+            state.isRolling = true;
+            diceElement.classList.add('rolling');
+
+            let counter = 0;
+            const rollInterval = setInterval(() => {
+                diceElement.innerText = diceIcons[Math.floor(Math.random() * 6)];
+                counter++;
+                if (counter > 12) {
+                    clearInterval(rollInterval);
+                    const roll = Math.ceil(Math.random() * 6);
+                    diceElement.innerText = diceIcons[roll - 1];
+                    diceElement.classList.remove('rolling');
+                    state.isRolling = false;
+                    
+                    movePlayer(state.activePlayerIdx, roll);
+                    if (!state.gameEnded) checkSpaceEvent();
+                }
+            }, 80);
+        };
+
+        function checkSpaceEvent() {
+            const pIdx = state.activePlayerIdx;
+            const node = pathData[state.players[pIdx].pos];
+            
+            setTimeout(() => {
+                if (node.type === 'yellow') {
+                    const event = chaosEvents[Math.floor(Math.random() * chaosEvents.length)];
+                    showEvent(pIdx, "CHAOS EVENT!", event.title, event.desc);
+                    event.effect(pIdx);
+                } else if (node.type === 'red') {
+                    if (state.players[pIdx].pos === 12) {
+                        showEvent(pIdx, "DANGER!", "CROCODILE!", "The croc chased you back 5 spaces!");
+                        movePlayer(pIdx, -5);
+                    } else {
+                        showEvent(pIdx, "DANGER!", "Volcano Ash!", "You inhaled ash. Move back 2 spaces.");
+                        movePlayer(pIdx, -2);
+                    }
+                } else if (node.type === 'blue') {
+                    showEvent(pIdx, "NAUTICAL", "High Tide!", "The currents push you forward 2 spaces.");
+                    movePlayer(pIdx, 2);
+                }
+            }, 600);
+        }
+
+        function switchTurn() {
+            if (state.canRollAgain) {
+                state.canRollAgain = false;
+            } else {
+                state.activePlayerIdx = state.activePlayerIdx === 0 ? 1 : 0;
+                if (state.activePlayerIdx === 0) state.turns++;
+            }
+            updateUI();
+        }
+
+        document.getElementById('close-modal').onclick = () => {
+            modal.style.display = 'none';
+            if (!state.gameEnded) {
+                switchTurn();
+            }
+        };
+
+        window.onload = init;
+    </script>
+</body>
+</html>
